@@ -14,7 +14,16 @@ class MyJob implements Callable<String> {
   public String call() throws Exception {
     System.out.println(Thread.currentThread().getName()
         + " starting job " + myID);
-    Thread.sleep(1000 + (int)(Math.random() * 2000));
+    if (Thread.interrupted()) {
+      // arrange for shutdown...
+    }
+    try {
+      Thread.sleep(1000 + (int)(Math.random() * 2000));
+    } catch(InterruptedException ie) {
+      // arrange shutdown
+      System.out.println("Shutdown of job " + myID + " by request");
+      return null;
+    }
     System.out.println(Thread.currentThread().getName()
         + " ending job " + myID);
     if (Math.random() > 0.7) {
@@ -26,14 +35,19 @@ class MyJob implements Callable<String> {
 }
 
 public class UseExecutorService {
-  public static void main(String[] args) {
+  public static void main(String[] args) throws Throwable {
     ExecutorService es = Executors.newFixedThreadPool(2);
     List<Future<String>> lfs = new ArrayList<>();
     for (int i = 0; i < 10; i++) {
       Future<String> handle = es.submit(new MyJob());
       lfs.add(handle);
+      if (i == 1 || i == 5) {
+        Thread.sleep(10);
+        System.out.println("canceling job " + i);
+        handle.cancel(true);
+      }
     }
-    es.shutdown();
+//    es.shutdown();
 //    es.submit(new MyJob());
     System.out.println("Jobs submitted...");
 
@@ -49,6 +63,9 @@ public class UseExecutorService {
             System.out.println("Ouch, interrupted, that shouldn't happen!");
           } catch (ExecutionException e) {
             System.out.println("Job threw an exception: " + e.getCause());
+          } catch (CancellationException ce) {
+            System.out.println("Job threw cancellation exception "
+                + ce.getMessage());
           }
           ifs.remove();
         }
